@@ -1,3 +1,36 @@
-*.duckdb
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Local environments and secrets
 .env
+.env.*
+venv/
+.venv/
+
+# Logs
+logs/
+*.log
+
+# DuckDB local artifacts
+*.duckdb
+*.wal
+
+# dbt artifacts
+dbt_packages/
+target/
+dbt/logs/
+dbt/icims_project/target/
+dbt/icims_project/dbt_packages/
+dbt/icims_project/logs/

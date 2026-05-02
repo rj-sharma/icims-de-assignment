@@ -1,127 +1,160 @@
-2# iCIMS Data Engineering Take-Home Assignment
+# iCIMS Data Engineering Take-Home Assignment
 
-## 📌 Overview
+## Overview
 
-This project implements an end-to-end data pipeline using a **Medallion Architecture (Bronze → Silver → Gold)** to process recruitment data and generate analytical datasets.
+This repository contains my solution for the iCIMS Data Engineering assignment.
 
-The solution focuses on:
-- Data ingestion from multiple formats (CSV, JSON, JSONL)
-- Transformation using dbt
-- Dimensional modeling (Star Schema)
-- Data quality and idempotency
+- Ingestion pipeline (Task Group 1) loads source files into DuckDB raw tables.
+- dbt models transform raw data into staging and marts layers.
+- Basic data quality checks are implemented with dbt tests.
 
----
+## Assignment Coverage
 
-## 🏗️ Architecture
+- Task Group 1: Implemented
+  - Database setup and ingestion into `raw` schema
+  - Idempotent loading with `CREATE OR REPLACE TABLE`
+- Task Group 2: In progress / partial
+  - Staging and mart models in dbt
+  - `time_to_hire`, `is_hired`, and `current_status` metrics in marts
 
-### 🥉 Bronze Layer (Raw)
-- Data ingested into DuckDB using Python
-- Raw tables created with minimal transformation
-- Idempotent ingestion using `CREATE OR REPLACE`
+## Project Structure
 
-### 🥈 Silver Layer (Staging - dbt)
-- Data cleaning and standardization
-- Handles:
-  - Type casting
-  - Deduplication
-  - String normalization
-- Models: `stg_*`
-
-### 🥇 Gold Layer (Marts)
-- Star schema design for analytics
-- Fact and dimension tables:
-  - `fct_applications`
-  - `fct_workflow_events`
-  - `dim_job`
-  - `dim_candidate`
-
----
-
-## 📊 Data Model
-
-Based on the provided ERD:
-
-- **Fact Tables**
-  - `fct_applications`: Application lifecycle with derived metrics
-  - `fct_workflow_events`: Status change history
-
-- **Dimension Tables**
-  - `dim_job`: Job attributes
-  - `dim_candidate`: Candidate profile with nested education
-
-- **Key Metrics**
-  - `time_to_hire`
-  - `is_hired`
-  - `current_status`
-
----
-
-## ⚙️ Tech Stack
-
-- **DuckDB** → Analytical database
-- **dbt (DuckDB adapter)** → Transformations
-- **Python (pandas)** → Ingestion
-
----
-
-## 🚀 Setup Instructions
-
-### 1. Clone Repository
-
-```bash
-git clone <your-repo-url>
-cd icims-de-assignment
+```text
+.
+├── data/                           # Input files provided in assignment
+├── src/ingestion/load_data.py      # Task 1 ingestion script
+├── dbt/icims_project/              # dbt project (staging + marts)
+├── requirements.txt
+└── ReadMe.md
 ```
 
-### 2. Create Virtual Environment
+## Tech Stack
+
+- Python 3.9+ (tested with local Python)
+- DuckDB
+- pandas
+- dbt-core
+- dbt-duckdb
+
+## Prerequisites
+
+- `python3` available on PATH
+- `pip` available
+- macOS/Linux shell commands below (Windows users can run equivalent commands in PowerShell)
+
+## Quick Start (From Scratch)
+
+Run all commands from the repository root:
+
+```bash
+cd /path/to/icims-de-assignment
+```
+
+### 1) Create and activate virtual environment
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate      # Mac/Linux
 venv\Scripts\activate         # Windows
 ```
 
-### 3. Install dependencies
+### 2) Install dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-#### 4. Configure dbt Profile
-edit - `~/.dbt/profiles.yml`
+### 3) Configure dbt profile
 
-add below in the file
-```
+Create or update `~/.dbt/profiles.yml` with:
+
+```yaml
 icims_project:
   target: dev
   outputs:
     dev:
       type: duckdb
-      path: ../../icims.duckdb
+      path: /absolute/path/to/icims-de-assignment/icims.duckdb
       threads: 4
 ```
 
-### 5. Load Raw Data (Bronze Layer)
+Important: use an absolute path (recommended) or ensure you always run dbt from the same working directory. A wrong path is the most common setup issue.
 
-```bash 
+### 4) Load raw data (Task Group 1)
+
+```bash
 python src/ingestion/load_data.py
 ```
 
+This creates/refreshes:
 
-### 6. Run dbt Models (Silver + Gold)
+- `raw.jobs`
+- `raw.candidates`
+- `raw.education`
+- `raw.applications`
+- `raw.workflow_events`
+
+### 5) Run dbt transformations
 
 ```bash
-cd dbt/icims_project
-dbt run
-dbt test
+dbt run --project-dir dbt/icims_project
+dbt test --project-dir dbt/icims_project
 ```
 
+### 6) Optional: run a single model
 
+```bash
+dbt run --project-dir dbt/icims_project --select dim_candidates
+```
 
-## Validation
+Or with dependencies:
 
-Run sample query:
-```python
+```bash
+dbt run --project-dir dbt/icims_project --select +dim_candidates
+```
+
+## Validation Queries
+
+Use DuckDB to quickly verify outputs:
+
+```bash
+python3 - <<'PY'
 import duckdb
-
 con = duckdb.connect("icims.duckdb")
-con.execute("SELECT * FROM fct_applications LIMIT 10").fetchall()
+print("Raw tables:", con.execute("SHOW TABLES FROM raw").fetchall())
+print("fct_applications rows:", con.execute("SELECT COUNT(*) FROM fct_applications").fetchone()[0])
+print("Open jobs:", con.execute("SELECT COUNT(*) FROM raw.jobs WHERE lower(status)='open'").fetchone()[0])
+PY
 ```
+
+## Re-run Setup from a Clean State
+
+To clean generated artifacts and re-test setup docs:
+
+```bash
+bash scripts/reset_env.sh
+```
+
+What it removes:
+
+- Local DuckDB artifacts: `icims.duckdb`, `dbt/icims_project/icims.duckdb`
+- dbt build artifacts: `dbt/icims_project/target`, `dbt/icims_project/dbt_packages`
+- log folders: `logs`, `dbt/logs`
+
+To also remove the virtual environment:
+
+```bash
+bash scripts/reset_env.sh --remove-venv
+```
+
+## Common Errors and Fixes
+
+1. `Table ... does not exist`
+   - Ensure `python src/ingestion/load_data.py` was run successfully.
+   - Ensure `profiles.yml` points to the correct `icims.duckdb`.
+
+2. dbt model fails due to missing columns
+   - Run dependencies too: `dbt run --project-dir dbt/icims_project --select +<model_name>`.
+
+3. dbt cannot connect to DuckDB
+   - Verify `path` in `~/.dbt/profiles.yml` is valid and accessible.
