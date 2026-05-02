@@ -117,6 +117,46 @@ dbt run --project-dir dbt/icims_project --select +dim_candidates
 
 The `applications` source is modeled with a validated split pattern so that no source row is silently dropped.
 
+## Stage Layer Design (Low-Level)
+
+The staging layer is organized into three folders so transformation intent is explicit and reusable:
+
+```text
+dbt/icims_project/models/staging/
+├── int/          # shared validation/normalization models
+├── core/         # valid, curated staging outputs consumed by marts
+└── quarantine/   # invalid records with quarantine reason
+```
+
+### Pattern used for each raw source
+
+For each source (`applications`, `candidates`, `jobs`, `education`, `workflow_events`):
+
+1. `int_<source>_validated`
+   - Reads from `source('raw', '<source>')`
+   - Performs normalization and type parsing
+   - Computes validation flags
+2. `stg_<source>`
+   - Keeps only valid rows for downstream marts
+3. `stg_<source>_quarantine`
+   - Stores invalid rows with `quarantine_reason`
+
+### Materialization
+
+- `staging/int` -> `table`
+- `staging/core` -> `table`
+- `staging/quarantine` -> `table`
+
+Configured in `dbt_project.yml` at folder level.
+
+### Completeness contract
+
+For every source, valid and quarantine are complementary filters over the same validated model. This ensures:
+
+- `raw_count = valid_count + quarantine_count`
+
+No input row is silently dropped.
+
 ### Models
 
 - `int_applications_validated` (materialized as table)
