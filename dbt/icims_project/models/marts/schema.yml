@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: fct_applications
+    columns:
+      - name: application_id
+        tests:
+          - unique
+          - not_null
+
+      - name: job_id
+        tests:
+          - not_null
