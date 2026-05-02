@@ -113,6 +113,55 @@ Or with dependencies:
 dbt run --project-dir dbt/icims_project --select +dim_candidates
 ```
 
+## Low-Level Design: Applications Data Handling
+
+The `applications` source is modeled with a validated split pattern so that no source row is silently dropped.
+
+### Models
+
+- `int_applications_validated` (materialized as table)
+  - Reads from `source('raw', 'applications')`
+  - Normalizes text (`trim`, empty string to `NULL`)
+  - Parses mixed date formats into `apply_date`
+  - Computes validation flags for required IDs
+- `stg_applications` (materialized as table)
+  - Keeps only valid records for downstream marts
+- `stg_applications_quarantine` (materialized as table)
+  - Stores invalid records with `quarantine_reason`
+
+### Accepted `apply_date` formats
+
+- `%Y-%m-%d` (example: `2025-06-21`)
+- `%Y.%m.%d` (example: `2025.09.25`)
+- `%d-%b-%Y` (example: `13-Nov-2025`)
+- `%B %d, %Y` (example: `October 24, 2025`)
+- `%b %d, %Y` (example: `Oct 24, 2025`)
+- `%Y/%m/%d` (example: `2025/09/02`)
+
+### Data quality behavior
+
+- Valid path requires:
+  - `application_id` not null
+  - `job_id` not null
+  - `candidate_id` not null
+  - `apply_date` parsed successfully
+- Invalid rows are routed to quarantine with one of:
+  - `INVALID_APPLICATION_ID`
+  - `INVALID_JOB_ID`
+  - `INVALID_CANDIDATE_ID`
+  - `INVALID_APPLY_DATE`
+
+### Completeness guarantee
+
+The valid and quarantine models are complementary filters over the same validated base model. This guarantees:
+
+- `count(raw.applications) = count(stg_applications) + count(stg_applications_quarantine)`
+
+### Notes
+
+- Current dbt schema naming may create objects under `main_staging` (expected behavior with dbt default schema naming).
+- Date parsing can be moved to Python ingestion later if richer locale-aware parsing is required.
+
 ## Validation Queries
 
 Use DuckDB to quickly verify outputs:
