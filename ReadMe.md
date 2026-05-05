@@ -20,6 +20,26 @@ dbt run
 dbt test
 ```
 
+
+--- 
+# 🏗️ Architecture
+
+## Local (Assignment)
+Python Ingestion → DuckDB (raw) → dbt (staging → marts)
+
+## Scalable (Lakehouse)
+S3 (Parquet/Iceberg)
+↓
+Spark (Glue/EMR)
+↓
+Curated (Silver)
+↓
+Gold (Facts/Dimensions)
+↓
+Warehouse / BI
+
+---
+
 ---
 
 # 🛠 Engineering Workflow
@@ -214,6 +234,60 @@ DATE_DIFF('day', apply_date, hired_date)
 - Supports accurate reporting
 
 ---
+
+# 🔷 Task 3: Engineering & Optimization
+
+Idempotency:
+- Raw reset for demo
+- dbt incremental models
+- run_date parameter
+
+Data Quality:
+- dbt tests (unique, not_null)
+- anomaly flag: hired_date < applied_date
+
+Scaling (10TB):
+- Lakehouse: S3 + Parquet + Iceberg
+- Spark (EMR/Glue)
+
+Micro-batch Dedup:
+- Dedup within batch
+- Merge using keys
+
+Partitioning:
+- event_date
+
+Partition Overwrite:
+.mode("overwrite")
+.option("replaceWhere", "event_date = '2026-05-05'")
+
+Benefits:
+- Efficient backfills
+- Scalable
+- Idempotent
+
+Unit Testing:
+- Python + dbt tests
+
+---
+
+# 🛠️ Orchestration
+
+create_tables → ingestion → stg → dim → fct → test
+
+Supports incremental + full runs
+
+---
+
+# 🚀 Final Thoughts
+
+Demonstrates:
+- End-to-end pipeline
+- Data modeling
+- Scalable architecture
+- Production practices
+
+--
 
 # 🛠 Troubleshooting
 
