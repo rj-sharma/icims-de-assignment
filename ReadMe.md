@@ -1,72 +1,124 @@
-# iCIMS Data Engineering Take-Home Assignment
+# 🚀 Quick Start
 
-## Overview
-
-This repository contains my solution for the iCIMS Data Engineering assignment.
-
-- Ingestion pipeline (Task Group 1) loads source files into DuckDB raw tables.
-- dbt models transform raw data into staging and marts layers.
-- Basic data quality checks are implemented with dbt tests.
-
-## Assignment Coverage
-
-- Task Group 1: Implemented
-  - Database setup and ingestion into `raw` schema
-  - Idempotent loading with `CREATE OR REPLACE TABLE`
-- Task Group 2: In progress / partial
-  - Staging and mart models in dbt
-  - `time_to_hire`, `is_hired`, and `current_status` metrics in marts
-
-## Project Structure
-
-```text
-.
-├── data/                           # Input files provided in assignment
-├── src/ingestion/load_data.py      # Task 1 ingestion script
-├── dbt/icims_project/              # dbt project (staging + marts)
-├── requirements.txt
-└── ReadMe.md
-```
-
-## Tech Stack
-
-- Python 3.9+ (tested with local Python)
-- DuckDB
-- pandas
-- dbt-core
-- dbt-duckdb
-
-## Prerequisites
-
-- `python3` available on PATH
-- `pip` available
-- macOS/Linux shell commands below (Windows users can run equivalent commands in PowerShell)
-
-## Quick Start (From Scratch)
-
-Run all commands from the repository root:
-
+## 1. Environment Setup
 ```bash
-cd /path/to/icims-de-assignment
-```
-
-### 1) Create and activate virtual environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate      # Mac/Linux
-venv\Scripts\activate         # Windows
-```
-
-### 2) Install dependencies
-
-```bash
+# Install required packages
 pip install -r requirements.txt
 ```
 
-### 3) Configure dbt profile
+## 2. Ingest Raw Data
+Run the ingestion script to initialize the `icims.duckdb` database and load the raw schema.
 
-Create or update `~/.dbt/profiles.yml` with:
+```bash
+python src/ingestion/load_data.py
+```
+
+## 3. Run Transformations & Tests
+Navigate to the dbt project directory to build the models.
+
+```bash
+cd dbt/icims_project
+
+# Run models
+dbt run
+
+# Run data quality tests
+dbt test
+```
+
+---
+
+# 🛠 Engineering Workflow
+
+## I. Ingestion (Task Group 1)
+The `load_data.py` script serves as the primary entry point.  
+It ensures **idempotency** by utilizing `CREATE OR REPLACE TABLE` logic.
+
+**Schema:** All data is initially loaded into the `raw` schema.  
+**Tables:** `jobs`, `candidates`, `education`, `applications`, `workflow_events`.
+
+---
+
+## II. dbt Modeling Architecture
+We follow a standard **medallion-style architecture** to ensure data lineage and quality:
+
+### **Staging (`stg_`)**
+- Normalizes column names  
+- Applies type casting  
+- Standardizes date formats  
+
+### **Marts (`dim_`, `fct_`)**
+Final analytical models, including:
+
+- `fct_applications`
+- `dim_candidates`
+
+These include important business metrics such as:
+
+- `time_to_hire`
+- `is_hired`
+
+---
+
+## III. Data Quality
+We utilize **dbt’s testing framework** to maintain high integrity:
+
+### **Generic Tests**
+- `unique`
+- `not_null`
+- `accepted_values`
+
+### **Custom Tests**
+Located in `tests/`, including:
+
+- `valid_dates.sql` → Ensures application dates occur before hiring dates.
+
+---
+
+# 📊 Analytical Insights (Task 1)
+
+### **a) How many jobs are currently open?**
+```sql
+SELECT COUNT(*) 
+FROM raw.jobs 
+WHERE lower(status) = 'open';
+```
+
+### **b) Top 5 departments by number of applications**
+```sql
+SELECT j.department,
+       COUNT(a.application_id) AS total_applications
+FROM raw.applications a
+JOIN raw.jobs j ON a.job_id = j.job_id
+GROUP BY j.department
+ORDER BY total_applications DESC
+LIMIT 5;
+```
+
+### **c) Candidates who applied to more than 3 jobs**
+```sql
+SELECT candidate_id,
+       COUNT(DISTINCT job_id) AS jobs_applied
+FROM raw.applications
+GROUP BY candidate_id
+HAVING COUNT(DISTINCT job_id) > 3;
+```
+
+---
+
+# 🛠 Troubleshooting & Notes
+
+| Issue | Fix / Explanation |
+|-------|-------------------|
+| **Table Not Found** | Ensure you run ingestion first: `python load_data.py` |
+| **dbt Connection Error** | Verify the DuckDB path in `profiles.yml` is absolute |
+| **Model Failure** | Ensure all staging models are built before marts |
+
+---
+
+### ⭐ Important Configuration Note
+
+To run dbt, ensure your `profiles.yml` is configured as follows:
 
 ```yaml
 icims_project:
@@ -74,19 +126,56 @@ icims_project:
   outputs:
     dev:
       type: duckdb
-      path: /absolute/path/to/icims-de-assignment/icims.duckdb
+      path: /absolute/path/to/icims.duckdb  # Update this!
       threads: 4
 ```
 
-Important: use an absolute path (recommended) or ensure you always run dbt from the same working directory. A wrong path is the most common setup issue.
+# iCIMS Data Engineering Take-Home Assignment
 
-### 4) Load raw data (Task Group 1)
+## Overview
 
-```bash
-python src/ingestion/load_data.py
-```
+This repository contains my solution for the iCIMS Data Engineering assignment. It includes:
 
-This creates/refreshes:
+- A Python ingestion pipeline using DuckDB (Task Group 1)
+- dbt transformations (staging + marts)
+- Data validation tests
+- SQL answers for the analytical questions from Task Group 1
+
+---
+
+## Project Structure
+
+
+.
+├── data/ # Raw CSV files provided in the assignment
+├── src/
+│ └── ingestion/
+│ └── load_data.py # Ingestion script for Task Group 1
+├── dbt/
+│ └── icims_project/ # dbt project (sources, staging, marts, tests)
+├── sql/
+│ └── task1_analysis.sql # SQL answers for Task 1 analytical questions
+├── requirements.txt
+└── README.md
+
+
+---
+
+## Tech Stack
+
+- Python 3.9+
+- DuckDB
+- pandas
+- dbt-core
+- dbt-duckdb
+
+---
+
+# 1. Ingestion Pipeline (Task Group 1)
+
+The ingestion process loads raw CSV files into DuckDB under the `raw` schema.
+
+### Raw tables created
 
 - `raw.jobs`
 - `raw.candidates`
@@ -94,156 +183,101 @@ This creates/refreshes:
 - `raw.applications`
 - `raw.workflow_events`
 
-### 5) Run dbt transformations
+### Ingestion properties
+
+- Idempotent loads using `CREATE OR REPLACE TABLE`
+- Uses pandas + DuckDB for fast ingestion
+- All files sourced from the `data/` directory
+
+### Run ingestion
 
 ```bash
-dbt run --project-dir dbt/icims_project 
+python src/ingestion/load_data.py
+2. dbt Project Structure
+
+dbt project located at:
+
+dbt/icims_project/
+Staging models
+Standardized column naming
+Date parsing for multiple formats
+Type normalization
+Source freshness tests
+Mart models
+dim_candidates
+fct_applications
+Derived business logic fields:
+is_hired
+current_status
+time_to_hire
+Data quality tests
+Unique tests
+Not-null tests
+Accepted values tests
+Custom SQL tests
+3. Running dbt
+Install dependencies
+pip install -r requirements.txt
+Configure dbt profile
+
+Add this to ~/.dbt/profiles.yml:
+
+icims_project:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: /absolute/path/to/icims.duckdb
+      threads: 4
+Run dbt models
+dbt run --project-dir dbt/icims_project
+Run dbt tests
 dbt test --project-dir dbt/icims_project
-```
-
-### 6) Optional: run a single model
-
-```bash
+Run a single model
 dbt run --project-dir dbt/icims_project --select dim_candidates
-```
-
-Or with dependencies:
-
-```bash
-dbt run --project-dir dbt/icims_project --select +dim_candidates
-```
-
-## Low-Level Design: Applications Data Handling
-
-The `applications` source is modeled with a validated split pattern so that no source row is silently dropped.
-
-## Stage Layer Design (Low-Level)
-
-The staging layer is organized into three folders so transformation intent is explicit and reusable:
-
-```text
-dbt/icims_project/models/staging/
-├── int/          # shared validation/normalization models
-├── core/         # valid, curated staging outputs consumed by marts
-└── quarantine/   # invalid records with quarantine reason
-```
-
-### Pattern used for each raw source
-
-For each source (`applications`, `candidates`, `jobs`, `education`, `workflow_events`):
-
-1. `int_<source>_validated`
-   - Reads from `source('raw', '<source>')`
-   - Performs normalization and type parsing
-   - Computes validation flags
-2. `stg_<source>`
-   - Keeps only valid rows for downstream marts
-3. `stg_<source>_quarantine`
-   - Stores invalid rows with `quarantine_reason`
-
-### Materialization
-
-- `staging/int` -> `table`
-- `staging/core` -> `table`
-- `staging/quarantine` -> `table`
-
-Configured in `dbt_project.yml` at folder level.
-
-### Completeness contract
-
-For every source, valid and quarantine are complementary filters over the same validated model. This ensures:
-
-- `raw_count = valid_count + quarantine_count`
-
-No input row is silently dropped.
-
-### Models
-
-- `int_applications_validated` (materialized as table)
-  - Reads from `source('raw', 'applications')`
-  - Normalizes text (`trim`, empty string to `NULL`)
-  - Parses mixed date formats into `apply_date`
-  - Computes validation flags for required IDs
-- `stg_applications` (materialized as table)
-  - Keeps only valid records for downstream marts
-- `stg_applications_quarantine` (materialized as table)
-  - Stores invalid records with `quarantine_reason`
-
-### Accepted `apply_date` formats
-
-- `%Y-%m-%d` (example: `2025-06-21`)
-- `%Y.%m.%d` (example: `2025.09.25`)
-- `%d-%b-%Y` (example: `13-Nov-2025`)
-- `%B %d, %Y` (example: `October 24, 2025`)
-- `%b %d, %Y` (example: `Oct 24, 2025`)
-- `%Y/%m/%d` (example: `2025/09/02`)
-
-### Data quality behavior
-
-- Valid path requires:
-  - `application_id` not null
-  - `job_id` not null
-  - `candidate_id` not null
-  - `apply_date` parsed successfully
-- Invalid rows are routed to quarantine with one of:
-  - `INVALID_APPLICATION_ID`
-  - `INVALID_JOB_ID`
-  - `INVALID_CANDIDATE_ID`
-  - `INVALID_APPLY_DATE`
-
-### Completeness guarantee
-
-The valid and quarantine models are complementary filters over the same validated base model. This guarantees:
-
-- `count(raw.applications) = count(stg_applications) + count(stg_applications_quarantine)`
-
-### Notes
-
-- Current dbt schema naming may create objects under `main_staging` (expected behavior with dbt default schema naming).
-- Date parsing can be moved to Python ingestion later if richer locale-aware parsing is required.
-
-## Validation Queries
-
-Use DuckDB to quickly verify outputs:
-
-```bash
+4. SQL Answers for Task Group 1
+a) How many jobs are currently open?
+SELECT COUNT(*)
+FROM raw.jobs
+WHERE lower(status) = 'open';
+b) Top 5 departments by number of applications
+SELECT j.department,
+       COUNT(a.application_id) AS total_applications
+FROM raw.applications a
+JOIN raw.jobs j 
+  ON a.job_id = j.job_id
+GROUP BY j.department
+ORDER BY total_applications DESC
+LIMIT 5;
+c) Candidates who applied to more than 3 jobs
+SELECT candidate_id,
+       COUNT(DISTINCT job_id) AS jobs_applied
+FROM raw.applications
+GROUP BY candidate_id
+HAVING COUNT(DISTINCT job_id) > 3;
+5. Validation Queries
 python3 - <<'PY'
 import duckdb
 con = duckdb.connect("icims.duckdb")
 print("Raw tables:", con.execute("SHOW TABLES FROM raw").fetchall())
-print("fct_applications rows:", con.execute("SELECT COUNT(*) FROM fct_applications").fetchone()[0])
-print("Open jobs:", con.execute("SELECT COUNT(*) FROM raw.jobs WHERE lower(status)='open'").fetchone()[0])
+print("Applications fact count:",
+      con.execute("SELECT COUNT(*) FROM fct_applications").fetchone()[0])
 PY
-```
+6. Troubleshooting
+Issue	Resolution
+Missing tables	Run ingestion: python load_data.py
+dbt connection issues	Ensure path in profiles.yml is correct
+Tests failing	Confirm staging models built before marts
+Schema mismatch	Clear artifacts and rebuild
+7. Notes
+Ingestion is fully idempotent.
+dbt may create schemas like main_staging depending on defaults.
+Date parsing is handled in dbt; can be shifted to ingestion later.
+8. Possible Enhancements
 
-## Re-run Setup from a Clean State
+If extended time were available:
 
-To clean generated artifacts and re-test setup docs:
-
-```bash
-bash scripts/reset_env.sh
-```
-
-What it removes:
-
-- Local DuckDB artifacts: `icims.duckdb`, `dbt/icims_project/icims.duckdb`
-- dbt build artifacts: `dbt/icims_project/target`, `dbt/icims_project/dbt_packages`
-- log folders: `logs`, `dbt/logs`
-
-To also remove the virtual environment:
-
-```bash
-bash scripts/reset_env.sh --remove-venv
-```
-
-## Common Errors and Fixes
-
-1. `Table ... does not exist`
-   - Ensure `python src/ingestion/load_data.py` was run successfully.
-   - Ensure `profiles.yml` points to the correct `icims.duckdb`.
-
-2. dbt model fails due to missing columns
-   - Run dependencies too: `dbt run --project-dir dbt/icims_project --select +<model_name>`.
-
-3. dbt cannot connect to DuckDB
-   - Verify `path` in `~/.dbt/profiles.yml` is valid and accessible.
+Incremental dbt models
+Snapshotting for slowly changing jobs/candidates
+More advanced anomaly detection tests
+Auto-generated dbt docs & lineage visualization

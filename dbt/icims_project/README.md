@@ -35,3 +35,60 @@ Since workflow events are event streams without a natural primary key, I generat
 I also implemented deduplication logic based on business semantics rather than raw row uniqueness.
 
 Additionally, I added anomaly detection for cases where a “Hired” event occurs before the application date, which indicates data quality issues.
+
+
+🔹 Data Quality & Validation Framework
+
+Data quality checks are implemented using dbt tests, ensuring both schema-level and business-level validation across datasets.
+
+Custom Business Rule Validation
+
+A key business rule implemented:
+
+A candidate cannot be marked as HIRED before applying.
+
+This is validated using a custom dbt test:
+
+SELECT
+    w.application_id,
+    w.event_timestamp,
+    a.apply_date
+FROM {{ ref('stg_workflow_events') }} w
+JOIN {{ ref('stg_applications') }} a
+    ON w.application_id = a.application_id
+WHERE w.new_status = 'HIRED'
+AND w.event_timestamp < a.apply_date
+
+dbt test --select hired_before_applied --store-failures   
+
+run on duck db - SELECT * 
+FROM icims.main_dbt_test__audit.hired_before_applied;
+
+How many jobs are currently open?
+SELECT COUNT(*) AS open_jobs
+FROM icims.main_staging.stg_jobs sj 
+WHERE status = 'OPEN'; --178
+
+List candidates who applied to more than 3 jobs
+select count(*) from (
+SELECT c.candidate_id,
+      -- c.first_name ,
+      -- c.last_name ,
+       COUNT(DISTINCT a.job_id) AS jobs_applied
+FROM icims.main_staging.stg_applications a
+JOIN icims.main_staging.stg_candidates c 
+    ON a.candidate_id = c.candidate_id
+GROUP BY all
+HAVING COUNT(DISTINCT a.job_id) > 3
+) 506
+
+
+Top 5 departments by number of applications
+SELECT j.department,
+       COUNT(a.application_id) AS total_applications
+FROM icims.main_staging.stg_applications a
+JOIN icims.main_staging.stg_jobs j 
+    ON a.job_id = j.job_id
+GROUP BY j.department
+ORDER BY total_applications DESC
+LIMIT 5;
