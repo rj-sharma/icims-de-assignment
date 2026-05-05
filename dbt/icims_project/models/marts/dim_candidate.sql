@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
-    unique_key='candidate_id'
+    unique_key='candidate_id',
+    tags=['dim']
 ) }}
 
 WITH base AS (

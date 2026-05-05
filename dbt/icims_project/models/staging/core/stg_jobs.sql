@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
-    unique_key='job_id'
+    unique_key='job_id',
+    tags=['stg']
 ) }}
 
 WITH source AS (

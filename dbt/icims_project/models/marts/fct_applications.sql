@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
-    unique_key='application_id'
+    unique_key='application_id',
+    tags=['fact']
 ) }}
 
 WITH base_applications AS (
