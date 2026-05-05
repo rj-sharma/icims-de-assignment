@@ -97,7 +97,7 @@ This creates/refreshes:
 ### 5) Run dbt transformations
 
 ```bash
-dbt run --project-dir dbt/icims_project
+dbt run --project-dir dbt/icims_project 
 dbt test --project-dir dbt/icims_project
 ```
 

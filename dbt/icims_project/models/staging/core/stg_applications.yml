@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_applications
+    columns:
+      - name: application_id
+        tests:
+          - not_null
+          - unique
+
+      - name: apply_date
+        tests:
+          - not_null

@@ -1,0 +1,254 @@
+import duckdb
+import pandas as pd
+import os
+import uuid
+import json
+from datetime import datetime
+
+DB_PATH = "icims.duckdb"
+DATA_DIR = "data"
+
+
+def get_connection():
+    print("DB PATH:", os.path.abspath(DB_PATH))
+    return duckdb.connect(DB_PATH)
+
+
+def create_schema_and_tables(con):
+    # Create schema
+    con.execute("CREATE SCHEMA IF NOT EXISTS raw")
+    
+    # Drop table if exists
+    con.execute("DROP TABLE IF EXISTS raw.applications")
+
+    # Applications table (append-only raw)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS raw.applications (
+            application_id VARCHAR,
+            job_id VARCHAR,
+            candidate_id VARCHAR,
+            apply_date VARCHAR,
+
+            -- metadata
+            _ingestion_ts TIMESTAMP,
+            _batch_id VARCHAR,
+            _file_name VARCHAR
+        )
+    """)
+
+    con.execute("""
+        DROP TABLE IF EXISTS raw.education
+    """)
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS raw.education (
+            candidate_id VARCHAR,
+            degree VARCHAR,
+            institution VARCHAR,
+            year INTEGER,
+
+            -- metadata
+            _ingestion_ts TIMESTAMP,
+            _batch_id VARCHAR,
+            _file_name VARCHAR
+    )""")
+
+    con.execute("""
+        DROP TABLE IF EXISTS raw.candidates
+    """)
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS raw.candidates (
+            candidate_id VARCHAR,
+            first_name VARCHAR,
+            last_name VARCHAR,
+            email VARCHAR,
+            phone VARCHAR,
+            skills VARCHAR, -- keep raw
+
+            -- metadata
+            _ingestion_ts TIMESTAMP,
+            _batch_id VARCHAR,
+            _file_name VARCHAR
+    )""")
+
+    con.execute("""
+        DROP TABLE IF EXISTS raw.jobs
+    """)
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS raw.jobs (
+            job_id VARCHAR,
+            title VARCHAR,
+            department VARCHAR,
+            posted_date VARCHAR,
+            status VARCHAR,
+
+            -- metadata
+            _ingestion_ts TIMESTAMP,
+            _batch_id VARCHAR,
+            _file_name VARCHAR
+    )""")
+
+    con.execute("""
+        DROP TABLE IF EXISTS raw.workflow_events
+    """)
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS raw.workflow_events (
+            application_id VARCHAR,
+            old_status VARCHAR,
+            new_status VARCHAR,
+            event_timestamp VARCHAR,
+
+            -- metadata
+            _ingestion_ts TIMESTAMP,
+            _batch_id VARCHAR,
+            _file_name VARCHAR
+    )""")
+
+def ingest_applications(con):
+    file_path = os.path.join(DATA_DIR, "applications.csv")
+    print(f"Ingesting: {file_path}")
+
+    df = pd.read_csv(file_path)
+
+    if df.empty:
+        print("WARNING: applications.csv is empty")
+        return  
+    # Metadata columns
+    batch_id = str(uuid.uuid4())
+    ingestion_ts = datetime.utcnow()
+
+    df["_ingestion_ts"] = ingestion_ts
+    df["_batch_id"] = batch_id
+    df["_file_name"] = "applications.csv"
+
+    # Register dataframe
+    con.register("apps_df", df)
+
+    # Append-only insert
+    con.execute("""
+        INSERT INTO raw.applications
+        SELECT * FROM apps_df
+    """)
+
+    print(f"Loaded {len(df)} rows into raw.applications | batch_id={batch_id}")
+
+
+def ingest_education(con):
+    file_path = os.path.join(DATA_DIR, "education.csv")
+    print(f"Ingesting: {file_path}")
+
+    df = pd.read_csv(file_path)
+
+    batch_id = str(uuid.uuid4())
+    ingestion_ts = datetime.utcnow()
+
+    df["_ingestion_ts"] = ingestion_ts
+    df["_batch_id"] = batch_id
+    df["_file_name"] = "education.csv"
+
+    con.register("edu_df", df)
+
+    con.execute("""
+        INSERT INTO raw.education
+        SELECT * FROM edu_df
+    """)
+
+    print(f"Loaded {len(df)} rows into raw.education | batch_id={batch_id}")
+
+def ingest_candidates(con):
+    file_path = os.path.join(DATA_DIR, "candidates.json")
+    print(f"Ingesting: {file_path}")
+
+    with open(file_path) as f:
+        data = json.load(f)
+
+    df = pd.DataFrame(data)
+
+    batch_id = str(uuid.uuid4())
+    ingestion_ts = datetime.utcnow()
+
+    df["_ingestion_ts"] = ingestion_ts
+    df["_batch_id"] = batch_id
+    df["_file_name"] = "candidates.json"
+
+    # Convert skills to string (important for DuckDB simplicity)
+    if "skills" in df.columns:
+        df["skills"] = df["skills"].apply(lambda x: ",".join(x) if isinstance(x, list) else str(x))
+
+    con.register("candidates_df", df)
+
+    con.execute("""
+        INSERT INTO raw.candidates
+        SELECT * FROM candidates_df
+    """)
+
+    print(f"Loaded {len(df)} rows into raw.candidates | batch_id={batch_id}")
+
+def ingest_jobs(con):
+    file_path = os.path.join(DATA_DIR, "jobs.csv")
+    print(f"Ingesting: {file_path}")
+
+    df = pd.read_csv(file_path)
+
+    batch_id = str(uuid.uuid4())
+    ingestion_ts = datetime.utcnow()
+
+    df["_ingestion_ts"] = ingestion_ts
+    df["_batch_id"] = batch_id
+    df["_file_name"] = "jobs.csv"
+
+    con.register("jobs_df", df)
+
+    con.execute("""
+        INSERT INTO raw.jobs
+        SELECT * FROM jobs_df
+    """)
+
+    print(f"Loaded {len(df)} rows into raw.jobs | batch_id={batch_id}")
+
+def ingest_workflow_events(con):
+    file_path = os.path.join(DATA_DIR, "workflow_events.jsonl")
+    print(f"Ingesting: {file_path}")
+
+    df = pd.read_json(file_path, lines=True)
+
+    batch_id = str(uuid.uuid4())
+    ingestion_ts = datetime.utcnow()
+
+    df["_ingestion_ts"] = ingestion_ts
+    df["_batch_id"] = batch_id
+    df["_file_name"] = "workflow_events.jsonl"
+
+    con.register("events_df", df)
+
+    con.execute("""
+        INSERT INTO raw.workflow_events
+        SELECT * FROM events_df
+    """)
+
+    print(f"Loaded {len(df)} rows into raw.workflow_events | batch_id={batch_id}")
+
+def load_data():
+    con = get_connection()
+
+    create_schema_and_tables(con)
+
+    ingest_applications(con)
+
+    ingest_education(con)
+
+    ingest_candidates(con)
+
+    ingest_jobs(con)
+
+    ingest_workflow_events(con)
+
+    con.close()
+    print("Ingestion complete.")
+
+
+if __name__ == "__main__":
+    load_data()

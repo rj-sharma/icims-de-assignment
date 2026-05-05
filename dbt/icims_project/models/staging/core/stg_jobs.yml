@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_jobs
+    columns:
+      - name: job_id
+        tests:
+          - not_null
+          - unique
+
+      - name: posted_date
+        tests:
+          - not_null

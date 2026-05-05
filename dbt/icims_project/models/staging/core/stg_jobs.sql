@@ -1,13 +1,49 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='incremental',
+    unique_key='job_id'
+) }}
+
+WITH source AS (
+
+    SELECT *
+    FROM {{ source('raw', 'jobs') }}
+    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+
+),
+
+deduped AS (
+
+    SELECT *,
+           ROW_NUMBER() OVER (
+               PARTITION BY job_id
+               ORDER BY _ingestion_ts DESC
+           ) AS rn
+    FROM source
+
+),
+
+cleaned AS (
+
+    SELECT
+        job_id,
+
+        -- standardization
+        TRIM(title) AS title,
+        UPPER(TRIM(department)) AS department,
+        UPPER(TRIM(status)) AS status,
+
+        -- reuse macro (important)
+        {{ parse_date('posted_date') }} AS posted_date,
+
+        _ingestion_ts,
+        _batch_id
+
+    FROM deduped
+    WHERE rn = 1
+
+)
 
 SELECT
-    job_id,
-    title,
-    department,
-    posted_date,
-    status
-FROM {{ ref('int_jobs_validated') }}
-WHERE is_valid_job_id
-  AND title IS NOT NULL
-  AND posted_date IS NOT NULL
-  AND status IS NOT NULL
+    *,
+    CURRENT_TIMESTAMP AS _processed_ts
+FROM cleaned

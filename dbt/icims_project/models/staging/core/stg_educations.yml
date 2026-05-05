@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: stg_education
+    columns:
+      - name: candidate_id
+        tests:
+          - not_null
+          - unique
+
+      - name: degree
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['MS', 'BS', 'PhD']
