@@ -27,7 +27,7 @@ SELECT
 
     a.apply_date,
 
-    -- 🔥 anomaly flag
+    -- anomaly flag
     CASE 
         WHEN e.new_status = 'HIRED'
              AND e.event_timestamp < a.apply_date
