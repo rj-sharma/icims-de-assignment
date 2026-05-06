@@ -1,23 +1,39 @@
 # 🚀 Quick Start
 
+### 0. Clone repo or extract the zip
+```bash 
+cd icims-de-assignment
+```
+
 ## 1. Environment Setup
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 2. Ingest Raw Data
+### 2. Create raw tables
+```bash
+python3 src/ingestion/create_tables.py
+```
+
+## 3. Ingest Raw Data
 
 ```bash
 python src/ingestion/load_data.py
 ```
 
-## 3. Run Transformations & Tests
+## 4. Run Transformations & Tests
+<YYYY-MM-DD> this is run date
 
 ```bash
-cd dbt/icims_project
-dbt run
-dbt test
+dbt run --project-dir dbt/icims_project --vars '{"run_date":"<YYYY-MM-DD>"}' --full-refresh
+dbt test --project-dir dbt/icims_project --vars '{"run_date":"2026-05-05"}'
+```
+
+### run entire pipeline
+instead of step 3 and 4 you can run end to end pipeline using 
+```bash
+./scripts/run_pipeline.sh --date 2026-05-05 --full
 ```
 
 
