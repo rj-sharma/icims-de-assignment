@@ -8,7 +8,7 @@ WITH source AS (
 
     SELECT *
     FROM {{ source('raw', 'education') }}
-    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
 
 ),
 
@@ -35,7 +35,12 @@ standardized AS (
         year,
 
         _ingestion_ts,
-        _batch_id
+        _ingestion_date,
+        _batch_id,
+        _source_system,
+        _file_name,
+        _source_file_checksum,
+        _record_hash
 
     FROM deduped
     WHERE rn = 1

@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 SELECT *
 FROM {{ ref('stg_workflow_events') }} w
 JOIN {{ ref('stg_applications') }} a

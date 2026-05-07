@@ -41,8 +41,14 @@ This keeps the project easy to run on a laptop while still showing production-or
 │   └── run_pipeline.sh
 ├── src/
 │   └── ingestion/
+│       ├── README.md
+│       ├── common.py
 │       ├── create_tables.py
-│       ├── data_ingestion.py
+│       ├── ingest_applications.py
+│       ├── ingest_candidates.py
+│       ├── ingest_education.py
+│       ├── ingest_jobs.py
+│       ├── ingest_workflow_events.py
 │       └── load_data.py
 ├── requirements.txt
 ├── architecture-readme.md
@@ -52,6 +58,8 @@ This keeps the project easy to run on a laptop while still showing production-or
 For the detailed AWS lakehouse scaling design for a 10TB `workflow_events` dataset, see `architecture-readme.md`.
 
 For source-file profiling and first-pass data quality observations, see `analysis/source_data_analysis.md`. The same analysis is also available as a reproducible pandas notebook at `analysis/source_data_analysis.ipynb`.
+
+For raw ingestion assumptions, audit columns, source-specific load patterns, see `src/ingestion/README.md`.
 
 ## Data Flow
 
@@ -192,6 +200,12 @@ Use the date on which the ingestion ran. For example:
 dbt run --project-dir dbt/icims_project --vars '{"run_date":"2026-05-05"}' --full-refresh
 ```
 
+You can also run specifc layer model using tags
+
+```bash
+dbt run --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}" --select tag:stg --full-refresh
+```
+
 ### 6. Run dbt Tests
 
 ```bash
@@ -226,7 +240,7 @@ Dates are initially stored as strings in raw tables so the ingestion layer does 
 
 ### Ingestion
 
-`src/ingestion/load_data.py` reads the source files:
+`src/ingestion/load_data.py` orchestrates the source-specific ingestion modules:
 
 - CSV: `jobs.csv`, `education.csv`, `applications.csv`
 - JSON array: `candidates.json`
@@ -511,25 +525,23 @@ LIMIT 10;
 
 ### Idempotency
 
-Current local behavior:
+The pipeline is designed so the same source file and same `run_date` can be processed more than once without duplicating analytical results.
 
-- `create_tables.py` recreates raw tables for a deterministic clean run.
-- Raw records include `_batch_id`, `_ingestion_ts`, and `_file_name`.
-- dbt staging models deduplicate source records by business keys.
-- dbt mart models use incremental materialization and unique keys.
-- `run_date` allows a specific ingestion day to be processed.
+Implemented locally:
 
-Production improvement:
+- Each source load writes to `raw.ingestion_batches`.
+- File checksums are used to detect previously loaded files.
+- Snapshot-style sources such as jobs, candidates, and applications skip a file if the same successful batch already exists.
+- Batch-replay sources such as education and workflow events delete the same `_batch_id` before reloading, so reruns are deterministic.
+- dbt staging models deduplicate by business keys such as `job_id`, `candidate_id`, `application_id`, and `event_id`.
+- dbt mart models use incremental materialization with `unique_key` values.
+- Workflow-event enrichment and Time to Hire aggregates process impacted applications/jobs instead of blindly appending duplicate rows.
 
-- Use deterministic batch IDs based on file path, file size, and checksum.
-- Write a batch audit table with status: `started`, `loaded`, `failed`.
-- Delete or merge by `_batch_id` before inserting a rerun.
-- Use `MERGE`/upsert semantics for mutable dimensions.
-- Keep raw data append-only when audit history is required, but expose deduplicated current views downstream.
+This keeps raw and modeled row counts stable on rerun. In production I would use the same principles with object-store file checksums, Iceberg/Delta transaction metadata, `MERGE`, and batch audit states such as `STARTED`, `SUCCEEDED`, and `FAILED`.
 
 ### Data Quality
 
-Implemented dbt tests include:
+Implemented dbt checks include:
 
 - `not_null`
 - `unique`
@@ -538,8 +550,23 @@ Implemented dbt tests include:
 - invalid application date validation
 - invalid posted date validation
 - hired-before-applied anomaly detection
+- source freshness checks
+- raw source row-count volume checks
 
-Custom anomaly test:
+Source freshness is configured in `models/sources.yml` using `_ingestion_ts` as the loaded-at field:
+
+```bash
+dbt source freshness --project-dir dbt/icims_project --vars '{"run_date":"2026-05-07"}'
+```
+
+Volume anomaly checks use a reusable dbt generic test, `row_count_between`, to catch unexpected source row-count drops or spikes. For example, the local `workflow_events` source is expected to be between 15,000 and 18,000 rows for the provided assignment dataset.
+
+The hired-before-applied anomaly is handled in two ways:
+
+1. A dbt singular test detects it and reports it as a warning.
+2. A persisted audit model, `main_quality.dq_hired_before_applied_anomalies`, stores the anomalous records for investigation.
+
+The anomaly detection logic is:
 
 ```sql
 SELECT *
@@ -562,38 +589,69 @@ Handling strategy:
 - Flag it as an anomaly.
 - Exclude it from `hired_date` and `time_to_hire_days` calculations.
 - Store failures with `dbt test --store-failures` so data quality issues are auditable.
+- Alert data owners in production and correct the upstream source if the event timestamp or application timestamp is wrong.
+
+In production, I would keep dbt tests for deterministic warehouse checks and add a monitoring layer such as Anomalo, Monte Carlo, Soda, or Great Expectations for automated anomaly detection, trend-based volume monitoring, and alerting.
+
+### Unit Tests
+
+The project includes Python unit tests for ingestion helper functions in `tests/test_ingestion_common.py`.
+
+They validate:
+
+- file checksum generation
+- deterministic batch ID generation
+- batch ID changes when file content changes
+- stable row hashing
+- null normalization in hashes
+
+Run them with:
+
+```bash
+python3 -m pytest tests
+```
+
+dbt tests are also part of the unit/data test strategy for SQL models:
+
+```bash
+dbt test --project-dir dbt/icims_project --vars '{"run_date":"2026-05-07"}'
+```
 
 ### 10TB Workflow Events Scaling Design
 
 If `workflow_events.jsonl` were 10TB, I would not load it with pandas or a single local DuckDB process. I would move the event pipeline to a lakehouse architecture.
 
-Recommended architecture:
+Recommended AWS architecture:
 
 ```text
-Object storage landing zone
-  -> Spark ingestion
-  -> Bronze Iceberg/Delta tables
-  -> Silver cleaned events
-  -> Gold facts and dimensions
-  -> Query layer: Trino, Athena, Spark SQL (DuckDB for samples)
+Source event stream or bulk files
+  -> S3 landing zone
+  -> AWS Glue or EMR Spark ingestion
+  -> Bronze Apache Iceberg tables on S3
+  -> Silver cleaned/deduplicated Iceberg tables
+  -> dbt transformations for gold facts, dimensions, and aggregates
+  -> Athena, Trino, or Spark SQL query layer
+  -> CloudWatch metrics and alerts
 ```
 
 Storage choice:
 
-- Use Apache Iceberg or Delta Lake instead of raw JSONL for analytical tables.
-- Store data as Parquet.
-- Use table metadata, schema evolution, partition pruning, compaction, and ACID writes.
+- Use Apache Iceberg backed by Parquet on S3.
+- Iceberg gives ACID writes, schema evolution, hidden partitioning, time travel, and efficient `MERGE`.
+- Parquet avoids repeatedly scanning and parsing JSONL.
+- AWS Glue Catalog stores table metadata.
+- Lake Formation controls table, column, and row-level access.
 
 Partitioning and layout:
 
 - Partition workflow events by event date or ingestion date.
-- Cluster, bucket, or sort by `application_id` because most downstream joins and incremental recomputations are application-centric.
+- Sort or cluster by `application_id` and `event_timestamp` because downstream recomputation is application-centric.
 - Compact small files regularly.
 - Track min/max statistics for pruning.
 
 Ingestion strategy:
 
-- Read source files in parallel using Spark.
+- Read source files in parallel using Spark on Glue or EMR.
 - Validate schema at ingestion.
 - Add ingestion metadata and file lineage.
 - Write malformed records to a quarantine table.

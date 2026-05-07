@@ -264,7 +264,7 @@ Recommended dbt/source quality checks:
 - Use `event_id = md5(application_id || event_timestamp || new_status)` for workflow events.
 - Keep raw data faithful to source and perform parsing/cleanup in dbt staging.
 - Use a reusable dbt macro for mixed date parsing.
-- Preserve null departments instead of hiding source quality issues.
+- Preserve null departments
 - Use a left join from candidates to education so candidates without education are not dropped.
 - Preserve anomalies and flag them instead of deleting them.
 

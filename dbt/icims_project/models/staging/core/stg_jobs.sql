@@ -8,7 +8,7 @@ WITH source AS (
 
     SELECT *
     FROM {{ source('raw', 'jobs') }}
-    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
 
 ),
 
@@ -37,7 +37,12 @@ cleaned AS (
         {{ parse_date('posted_date') }} AS posted_date,
 
         _ingestion_ts,
-        _batch_id
+        _ingestion_date,
+        _batch_id,
+        _source_system,
+        _file_name,
+        _source_file_checksum,
+        _record_hash
 
     FROM deduped
     WHERE rn = 1

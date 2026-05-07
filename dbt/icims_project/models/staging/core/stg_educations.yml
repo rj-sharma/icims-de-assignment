@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: stg_education
+  - name: stg_educations
     columns:
       - name: candidate_id
         tests:
@@ -12,4 +12,12 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['MS', 'BS', 'PhD']
+              values: ['MS', 'BS', 'PHD']
+
+      - name: _batch_id
+        tests:
+          - not_null
+
+      - name: _record_hash
+        tests:
+          - not_null

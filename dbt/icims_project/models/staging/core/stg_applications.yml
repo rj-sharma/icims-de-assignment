@@ -11,3 +11,11 @@ models:
       - name: apply_date
         tests:
           - not_null
+
+      - name: _batch_id
+        tests:
+          - not_null
+
+      - name: _record_hash
+        tests:
+          - not_null

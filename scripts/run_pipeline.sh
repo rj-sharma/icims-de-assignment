@@ -2,26 +2,22 @@
 
 set -e  # fail fast
 
-# -------------------------------
 # DEFAULTS
-# -------------------------------
 RUN_DATE=$(date +%F)
 MODE="incremental"   # default
 
-# -------------------------------
 # ARGUMENT PARSING
-# -------------------------------
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --date) RUN_DATE="$2"; shift ;;
         --full) MODE="full" ;;
-        *) echo "❌ Unknown parameter: $1"; exit 1 ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
 done
 
 echo "========================================"
-echo "🚀 Starting Pipeline"
+echo "Starting Pipeline"
 echo "Run Date: $RUN_DATE"
 echo "Mode: $MODE"
 echo "========================================"
@@ -29,7 +25,7 @@ echo "========================================"
 # -------------------------------
 # STEP 1: INGESTION
 # -------------------------------
-echo "📥 Running ingestion..."
+echo "Running ingestion orchestrator..."
 python3 src/ingestion/load_data.py
 
 # -------------------------------
@@ -37,7 +33,7 @@ python3 src/ingestion/load_data.py
 # -------------------------------
 DBT_VARS="{run_date: '$RUN_DATE'}"
 
-echo "🧪 DBT_VARS = $DBT_VARS"
+echo "DBT_VARS = $DBT_VARS"
 
 if [ "$MODE" == "full" ]; then
     FULL_REFRESH="--full-refresh"
@@ -48,7 +44,7 @@ fi
 # -------------------------------
 # STEP 3: STAGING
 # -------------------------------
-echo "🔄 Running staging models..."
+echo "Running staging models..."
 dbt run \
   --project-dir dbt/icims_project \
   --vars "$DBT_VARS" \
@@ -58,7 +54,7 @@ dbt run \
 # -------------------------------
 # STEP 4: INTERMEDIATE
 # -------------------------------
-echo "🔄 Running intermediate models..."
+echo "Running intermediate models..."
 dbt run \
   --project-dir dbt/icims_project \
   --vars "$DBT_VARS" \
@@ -68,7 +64,7 @@ dbt run \
 # -------------------------------
 # STEP 5: DIMENSIONS
 # -------------------------------
-echo "📊 Running dimension models..."
+echo "Running dimension models..."
 dbt run \
   --project-dir dbt/icims_project \
   --vars "$DBT_VARS" \
@@ -78,7 +74,7 @@ dbt run \
 # -------------------------------
 # STEP 6: FACTS
 # -------------------------------
-echo "📊 Running fact models..."
+echo "Running fact models..."
 dbt run \
   --project-dir dbt/icims_project \
   --vars "$DBT_VARS" \
@@ -86,9 +82,37 @@ dbt run \
   --select tag:fact
 
 # -------------------------------
-# STEP 7: TESTS
+# STEP 7: METRICS / AGGREGATES
 # -------------------------------
-echo "✅ Running data quality tests..."
+echo "Running metric models..."
+dbt run \
+  --project-dir dbt/icims_project \
+  --vars "$DBT_VARS" \
+  $FULL_REFRESH \
+  --select tag:metric
+
+# -------------------------------
+# STEP 8: DATA QUALITY AUDIT MODELS
+# -------------------------------
+echo "Running data quality audit models..."
+dbt run \
+  --project-dir dbt/icims_project \
+  --vars "$DBT_VARS" \
+  $FULL_REFRESH \
+  --select tag:dq
+
+# -------------------------------
+# STEP 9: SOURCE FRESHNESS
+# -------------------------------
+echo "Checking source freshness..."
+dbt source freshness \
+  --project-dir dbt/icims_project \
+  --vars "$DBT_VARS"
+
+# -------------------------------
+# STEP 10: TESTS
+# -------------------------------
+echo "Running data quality tests..."
 dbt test \
   --project-dir dbt/icims_project \
   --vars "$DBT_VARS"

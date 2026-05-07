@@ -1,3 +1,5 @@
+-- depends_on: {{ ref('stg_workflow_events') }}
+
 {{ config(
     materialized='incremental',
     unique_key='application_id',
@@ -11,20 +13,20 @@ WITH base_applications AS (
 
 ),
 
--- identify impacted applications (correct incremental strategy)
+-- identify impacted applications
 changed_applications AS (
 
     {% if is_incremental() %}
 
     SELECT DISTINCT application_id
     FROM {{ ref('stg_workflow_events') }}
-    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
 
     UNION
 
     SELECT DISTINCT application_id
     FROM {{ ref('stg_applications') }}
-    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
 
     {% else %}
 
@@ -43,25 +45,12 @@ filtered_apps AS (
 
 ),
 
--- 🔥 inline enrichment
 enriched_events AS (
 
-    SELECT
-        w.application_id,
-        w.new_status,
-        w.event_timestamp,
-        a.apply_date,
-
-        CASE 
-            WHEN w.new_status = 'HIRED'
-                 AND w.event_timestamp < a.apply_date
-            THEN TRUE
-            ELSE FALSE
-        END AS is_anomaly
-
-    FROM {{ ref('stg_workflow_events') }} w
-    LEFT JOIN base_applications a
-        ON w.application_id = a.application_id
+    SELECT e.*
+    FROM {{ ref('int_workflow_events_enriched') }} e
+    JOIN changed_applications c
+        ON e.application_id = c.application_id
 
 ),
 
@@ -87,7 +76,7 @@ latest_status AS (
         SELECT *,
                ROW_NUMBER() OVER (
                    PARTITION BY application_id
-                   ORDER BY event_timestamp DESC
+                   ORDER BY event_timestamp DESC, event_sequence DESC
                ) AS rn
         FROM enriched_events
     )
@@ -114,6 +103,10 @@ SELECT
         THEN DATE_DIFF('day', a.apply_date, h.hired_date)
         ELSE NULL
     END AS time_to_hire_days,
+
+    a._ingestion_ts,
+    a._ingestion_date,
+    a._batch_id,
 
     CURRENT_TIMESTAMP AS _updated_at
 

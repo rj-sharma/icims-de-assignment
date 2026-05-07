@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: dq_hired_before_applied_anomalies
+    description: Audit table for workflow events where a HIRED event happened before the application apply date.
+    columns:
+      - name: event_id
+        tests:
+          - unique
+          - not_null
+      - name: application_id
+        tests:
+          - not_null
+      - name: days_before_apply
+        tests:
+          - not_null

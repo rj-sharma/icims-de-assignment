@@ -1,13 +1,78 @@
 version: 2
 
 models:
+  - name: dim_job
+    description: Current-state job dimension.
+    columns:
+      - name: job_id
+        tests:
+          - unique
+          - not_null
+      - name: posted_date
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['OPEN', 'CLOSED', 'DRAFT']
+
+  - name: dim_candidate
+    description: Current-state candidate dimension enriched with education.
+    columns:
+      - name: candidate_id
+        tests:
+          - unique
+          - not_null
+      - name: email
+        tests:
+          - not_null
+      - name: email_hash
+        tests:
+          - not_null
+
   - name: fct_applications
+    description: Application fact table at one row per application.
     columns:
       - name: application_id
         tests:
           - unique
           - not_null
+      - name: job_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_job')
+              field: job_id
+      - name: candidate_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_candidate')
+              field: candidate_id
+      - name: apply_date
+        tests:
+          - not_null
 
+  - name: fct_workflow_events
+    description: Workflow event fact table at one row per application status event.
+    columns:
+      - name: event_id
+        tests:
+          - unique
+          - not_null
+      - name: application_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('fct_applications')
+              field: application_id
+      - name: event_timestamp
+        tests:
+          - not_null
+
+  - name: agg_time_to_hire_by_job_department
+    description: Verification aggregate for time-to-hire by job and department.
+    columns:
       - name: job_id
         tests:
           - not_null

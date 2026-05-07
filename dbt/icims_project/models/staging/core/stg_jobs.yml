@@ -11,3 +11,16 @@ models:
       - name: posted_date
         tests:
           - not_null
+
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['OPEN', 'CLOSED', 'DRAFT']
+
+      - name: _batch_id
+        tests:
+          - not_null
+
+      - name: _record_hash
+        tests:
+          - not_null

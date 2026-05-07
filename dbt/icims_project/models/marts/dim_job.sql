@@ -10,7 +10,7 @@ WITH source AS (
     FROM {{ ref('stg_jobs') }}
 
     {% if is_incremental() %}
-    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
     {% endif %}
 
 ),

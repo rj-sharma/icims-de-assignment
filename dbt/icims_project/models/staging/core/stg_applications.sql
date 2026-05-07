@@ -9,8 +9,7 @@ WITH source AS (
     SELECT *
     FROM {{ source('raw', 'applications') }}
 
-    -- batch filtering
-    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
 
 ),
 
@@ -36,6 +35,11 @@ SELECT
     -- metadata
     _ingestion_ts,
     _batch_id,
+    _ingestion_date,
+    _source_system,
+    _file_name,
+    _source_file_checksum,
+    _record_hash,
     CURRENT_TIMESTAMP AS _processed_ts
 
 FROM deduped

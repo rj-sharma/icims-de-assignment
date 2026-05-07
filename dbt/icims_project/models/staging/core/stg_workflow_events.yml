@@ -15,3 +15,20 @@ models:
       - name: event_timestamp
         tests:
           - not_null
+
+      - name: event_date
+        tests:
+          - not_null
+
+      - name: new_status
+        tests:
+          - accepted_values:
+              values: ['APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'WITHDRAWN', 'REJECTED', 'HIRED']
+
+      - name: _batch_id
+        tests:
+          - not_null
+
+      - name: _record_hash
+        tests:
+          - not_null

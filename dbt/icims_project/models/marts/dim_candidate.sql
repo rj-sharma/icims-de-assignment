@@ -10,7 +10,7 @@ WITH base AS (
     FROM {{ ref('stg_candidates') }}
 
     {% if is_incremental() %}
-    WHERE DATE(_ingestion_ts) = '{{ var("run_date") }}'
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
     {% endif %}
 
 ),
@@ -33,8 +33,13 @@ joined AS (
         b.first_name,
         b.last_name,
         b.email,
+        b.email_hash,
         b.phone,
+        b.phone_hash,
         b.skills,
+        b.skills_array,
+        b.skills_normalized,
+        b.skills_count,
         b._ingestion_ts,
 
         e.degree,
@@ -62,11 +67,15 @@ SELECT
     first_name,
     last_name,
     email,
+    email_hash,
     phone,
-    skills,
-    degree,
-    institution,
-    year,
+    phone_hash,
+    skills_array AS skills,
+    json_object(
+        'degree', degree,
+        'institution', institution,
+        'year', year
+    ) AS education,
 
     CURRENT_TIMESTAMP AS _updated_at
 

@@ -11,3 +11,23 @@ models:
       - name: email
         tests:
           - not_null
+
+      - name: email_hash
+        tests:
+          - not_null
+
+      - name: phone_hash
+        tests:
+          - not_null
+
+      - name: skills_normalized
+        tests:
+          - not_null
+
+      - name: _batch_id
+        tests:
+          - not_null
+
+      - name: _record_hash
+        tests:
+          - not_null

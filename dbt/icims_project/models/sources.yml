@@ -5,7 +5,48 @@ sources:
     schema: raw
     tables:
       - name: jobs
+        loaded_at_field: _ingestion_ts
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+        tests:
+          - row_count_between:
+              min_rows: 400
+              max_rows: 600
       - name: candidates
+        loaded_at_field: _ingestion_ts
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+        tests:
+          - row_count_between:
+              min_rows: 1800
+              max_rows: 2200
       - name: education
+        loaded_at_field: _ingestion_ts
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+        tests:
+          - row_count_between:
+              min_rows: 1800
+              max_rows: 2200
       - name: applications
+        loaded_at_field: _ingestion_ts
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+        tests:
+          - row_count_between:
+              min_rows: 4500
+              max_rows: 5500
       - name: workflow_events
+        loaded_at_field: _ingestion_ts
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+        tests:
+          - row_count_between:
+              min_rows: 15000
+              max_rows: 18000
+      - name: ingestion_batches

@@ -34,12 +34,11 @@ models:
   icims_project:
     staging:
       +schema: staging
-      int:
-        +materialized: table
       core:
         +materialized: table
-      quarantine:
-        +materialized: table
+    quality:
+      +schema: quality
+      +materialized: table
     marts:
       +schema: marts
       +materialized: table

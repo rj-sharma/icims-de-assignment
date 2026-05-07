@@ -1,11 +1,32 @@
 {{ config(
-    materialized='table'
+    materialized='incremental',
+    unique_key='event_id',
+    tags=['int']
 ) }}
 
-WITH events AS (
+WITH impacted_applications AS (
 
-    SELECT *
+    {% if is_incremental() %}
+
+    SELECT DISTINCT application_id
     FROM {{ ref('stg_workflow_events') }}
+    WHERE _ingestion_date = CAST('{{ var("run_date") }}' AS DATE)
+
+    {% else %}
+
+    SELECT DISTINCT application_id
+    FROM {{ ref('stg_workflow_events') }}
+
+    {% endif %}
+
+),
+
+events AS (
+
+    SELECT e.*
+    FROM {{ ref('stg_workflow_events') }} e
+    JOIN impacted_applications i
+        ON e.application_id = i.application_id
 
 ),
 
@@ -24,6 +45,7 @@ SELECT
     e.old_status,
     e.new_status,
     e.event_timestamp,
+    e.event_date,
 
     a.apply_date,
 
@@ -35,14 +57,19 @@ SELECT
         ELSE FALSE
     END AS is_anomaly,
 
-    -- optional but strong
+    -- Recompute the full timeline for impacted applications so late events keep sequence correct.
     ROW_NUMBER() OVER (
         PARTITION BY e.application_id
         ORDER BY e.event_timestamp
     ) AS event_sequence,
 
     e._ingestion_ts,
+    e._ingestion_date,
     e._batch_id,
+    e._source_system,
+    e._file_name,
+    e._source_file_checksum,
+    e._record_hash,
     e._processed_ts
 
 FROM events e
