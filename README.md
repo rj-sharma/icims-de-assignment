@@ -20,7 +20,8 @@ The design is intentionally lightweight enough to run on a laptop, while still s
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Local and production architecture diagrams, including 10TB AWS lakehouse design |
 | [analysis/source_data_analysis.md](analysis/source_data_analysis.md) | Source data profiling summary |
 | [analysis/source_data_analysis.ipynb](analysis/source_data_analysis.ipynb) | Reproducible pandas source analysis notebook |
-| [dbt/icims_project/assignment_sql/task1_result.sql](dbt/icims_project/assignment_sql/task1_result.sql) | Task 1 SQL answers |
+| [dbt/icims_project/assignment_sql/task1_answers.sql](dbt/icims_project/assignment_sql/task1_answers.sql) | Task 1 SQL answers |
+| [dbt/icims_project/assignment_sql/task1_analysis.ipynb](dbt/icims_project/assignment_sql/task1_analysis.ipynb) | Runnable Task 1 validation notebook with expected results |
 
 ## Project Structure
 
@@ -159,7 +160,7 @@ Quality:
 
 ### Task 1: SQL Analysis
 
-SQL answers are in [task1_result.sql](dbt/icims_project/assignment_sql/task1_result.sql).
+SQL answers are in [task1_answers.sql](dbt/icims_project/assignment_sql/task1_answers.sql). A runnable validation notebook with expected results is available at [task1_analysis.ipynb](dbt/icims_project/assignment_sql/task1_analysis.ipynb).
 
 Current results from the provided data:
 
