@@ -34,8 +34,7 @@ models:
   icims_project:
     staging:
       +schema: staging
-      core:
-        +materialized: table
+      +materialized: table
     quality:
       +schema: quality
       +materialized: table
