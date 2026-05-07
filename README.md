@@ -1,0 +1,297 @@
+# iCIMS Data Engineering Assignment
+
+This repository contains a local, reproducible data engineering solution for the iCIMS take-home assignment.
+
+The implementation uses a simple local stack:
+
+- Python for file ingestion
+- DuckDB as the local warehouse and query layer
+- dbt for staging, marts, data quality checks, and SQL transformations
+- pytest for Python unit tests
+
+The design is intentionally lightweight enough to run on a laptop, while still showing production-oriented patterns: batch audit metadata, idempotent ingestion, raw-to-staging cleanup, incremental marts, anomaly detection, and a written AWS lakehouse design for a 10TB workflow event dataset.
+
+## Where To Read More
+
+| Document | Purpose |
+| --- | --- |
+| [README.md](README.md) | Main submission guide, setup, commands, and assignment summary |
+| [src/ingestion/README.md](src/ingestion/README.md) | Source-specific ingestion assumptions, audit columns, and idempotency details |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Local and production architecture diagrams, including 10TB AWS lakehouse design |
+| [analysis/source_data_analysis.md](analysis/source_data_analysis.md) | Source data profiling summary |
+| [analysis/source_data_analysis.ipynb](analysis/source_data_analysis.ipynb) | Reproducible pandas source analysis notebook |
+| [dbt/icims_project/assignment_sql/task1_result.sql](dbt/icims_project/assignment_sql/task1_result.sql) | Task 1 SQL answers |
+
+## Project Structure
+
+```text
+.
+├── analysis/                         # Source profiling notes and notebook
+├── data/                             # Provided source files
+├── dbt/icims_project/
+│   ├── assignment_sql/               # Task 1 SQL
+│   ├── macros/                       # dbt macros and generic tests
+│   ├── models/
+│   │   ├── staging/core/             # Cleaned source models
+│   │   ├── intermediate/             # Reusable workflow event enrichment
+│   │   ├── marts/                    # Facts, dimensions, aggregate metric
+│   │   └── quality/                  # Data quality audit models
+│   └── tests/                        # dbt singular tests
+├── scripts/
+│   ├── clean_local_artifacts.sh
+│   └── run_pipeline.sh
+├── src/ingestion/                    # Python raw ingestion modules
+├── tests/                            # Python unit tests
+├── ARCHITECTURE.md
+├── README.md
+└── requirements.txt
+```
+
+## Data Flow
+
+```mermaid
+flowchart LR
+    A[Source Files<br/>CSV / JSON / JSONL] --> B[Python Ingestion]
+    B --> C[DuckDB raw schema<br/>source values + audit columns]
+    C --> D[dbt staging<br/>clean, parse, dedupe]
+    D --> E[dbt intermediate<br/>workflow enrichment]
+    E --> F[dbt marts<br/>facts, dimensions, metric]
+    D --> G[dbt quality<br/>tests and anomaly audit]
+    F --> H[DuckDB SQL<br/>verification queries]
+```
+
+## Prerequisites
+
+- Python 3.10+
+- Git or a zip extract of the project
+- The provided files under `data/`
+
+## Setup
+
+From the project root:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+
+Create a dbt profile if one does not already exist at `~/.dbt/profiles.yml`:
+
+```yaml
+icims_project:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: icims.duckdb
+      threads: 4
+```
+
+## Run The Project
+
+### Option A: One Command
+
+```bash
+bash scripts/run_pipeline.sh --date 2026-05-07 --full
+```
+
+Use incremental mode after the first full run:
+
+```bash
+bash scripts/run_pipeline.sh --date 2026-05-07
+```
+
+### Option B: Step By Step
+
+```bash
+python3 src/ingestion/create_tables.py
+python3 src/ingestion/load_data.py
+
+dbt run --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}" --full-refresh
+dbt source freshness --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}"
+dbt test --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}"
+python3 -m pytest tests
+```
+
+If DuckDB is open in DBeaver or another tool, close that connection before running dbt. DuckDB allows many readers, but only one process can hold the write lock.
+
+## Expected Raw Counts
+
+After a clean load:
+
+| Raw table | Expected rows |
+| --- | ---: |
+| `raw.jobs` | 500 |
+| `raw.candidates` | 2001 |
+| `raw.education` | 2000 |
+| `raw.applications` | 5000 |
+| `raw.workflow_events` | 16769 |
+
+## Implemented Models
+
+Staging:
+
+- `stg_jobs`
+- `stg_candidates`
+- `stg_educations`
+- `stg_applications`
+- `stg_workflow_events`
+
+Intermediate:
+
+- `int_workflow_events_enriched`
+
+Marts:
+
+- `dim_job`
+- `dim_candidate`
+- `fct_applications`
+- `fct_workflow_events`
+- `agg_time_to_hire_by_job_department`
+
+Quality:
+
+- `dq_hired_before_applied_anomalies`
+
+## Assignment Summary
+
+### Task 1: SQL Analysis
+
+SQL answers are in [task1_result.sql](dbt/icims_project/assignment_sql/task1_result.sql).
+
+Current results from the provided data:
+
+| Question | Result |
+| --- | --- |
+| Currently open jobs | 178 |
+| Candidates who applied to more than 3 jobs | 506 |
+| Top department by applications | Marketing, 923 applications |
+
+### Task 2: Star Schema And Time To Hire
+
+I chose the dbt + DuckDB path because it clearly demonstrates warehouse-style modeling in a local, easy-to-run project.
+
+Star schema:
+
+```mermaid
+erDiagram
+    DIM_JOB ||--o{ FCT_APPLICATIONS : job_id
+    DIM_CANDIDATE ||--o{ FCT_APPLICATIONS : candidate_id
+    FCT_APPLICATIONS ||--o{ FCT_WORKFLOW_EVENTS : application_id
+
+    DIM_JOB {
+        string job_id PK
+        string title
+        string department
+        date posted_date
+        string status
+    }
+
+    DIM_CANDIDATE {
+        string candidate_id PK
+        string first_name
+        string last_name
+        string email
+        string phone
+        json skills
+        json education
+    }
+
+    FCT_APPLICATIONS {
+        string application_id PK
+        string job_id FK
+        string candidate_id FK
+        date apply_date
+        timestamp hired_date
+        string current_status
+        boolean is_hired
+        integer time_to_hire_days
+    }
+
+    FCT_WORKFLOW_EVENTS {
+        string event_id PK
+        string application_id FK
+        string old_status
+        string new_status
+        timestamp event_timestamp
+    }
+```
+
+Time to Hire is calculated in `fct_applications`:
+
+```sql
+DATE_DIFF('day', apply_date, hired_date)
+```
+
+`hired_date` is the first valid `HIRED` workflow event after the application date. Hired-before-applied anomalies are flagged and excluded from the metric.
+
+The reporting aggregate is:
+
+- `agg_time_to_hire_by_job_department`
+
+It is intentionally materialized as a simple table for readability in the local assignment. At production scale, this aggregate would be updated incrementally by impacted jobs or partitions.
+
+### Task 3: Engineering, Quality, Scaling, Tests
+
+Idempotency:
+
+- Raw ingestion uses file checksums, deterministic batch IDs, and `raw.ingestion_batches`.
+- Rerunning the same source files does not duplicate raw rows.
+- dbt staging deduplicates by source business keys.
+- dbt marts use incremental unique keys where appropriate.
+
+Data quality:
+
+- dbt source freshness checks
+- dbt uniqueness, not-null, accepted-values, and relationship tests
+- custom row-count volume checks through `row_count_between`
+- custom email/date tests
+- hired-before-applied anomaly warning test
+- persisted anomaly audit model: `dq_hired_before_applied_anomalies`
+
+Unit tests:
+
+- Python tests are in [tests/test_ingestion_common.py](tests/test_ingestion_common.py)
+- dbt model/data tests are under `dbt/icims_project/models/**.yml` and `dbt/icims_project/tests/`
+
+10TB scaling:
+
+- Local demo: Python + DuckDB + dbt
+- Production design: S3 + Glue/EMR Spark + Apache Iceberg + Glue Catalog + Lake Formation + dbt + Airflow + CloudWatch
+- Full design and diagrams are in [ARCHITECTURE.md](ARCHITECTURE.md)
+
+## Useful Commands
+
+Clean generated local artifacts:
+
+```bash
+bash scripts/clean_local_artifacts.sh --dry-run
+bash scripts/clean_local_artifacts.sh
+```
+
+Run only one dbt layer:
+
+```bash
+dbt run --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}" --select tag:stg
+dbt run --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}" --select tag:fact
+dbt run --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}" --select tag:dq
+```
+
+Store dbt test failures for debugging:
+
+```bash
+dbt test --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}" --store-failures
+```
+
+## Known Trade-Offs
+
+- DuckDB is used for local reproducibility; production multi-TB event processing should use distributed compute.
+- Dimensions are SCD Type 1 for assignment simplicity; SCD Type 2 would be added where history is analytically required.
+- Candidate PII is kept locally for inspection and also hashed; production should use encryption, tokenization, masking, and Lake Formation controls.
+- dbt tests cover deterministic checks; production should add operational monitoring such as Anomalo, Monte Carlo, Soda, Great Expectations, or Deequ.
+
+## AI Usage Statement
+
+I used AI assistance to speed up documentation structure, implementation review, and boilerplate generation. I reviewed the final code and documentation against the assignment requirements before including it.
