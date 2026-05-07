@@ -245,7 +245,3 @@ dbt test --project-dir dbt/icims_project --vars "{run_date: '2026-05-07'}" --sto
 - Dimensions are SCD Type 1 for assignment simplicity; SCD Type 2 would be added where history is analytically required.
 - Candidate PII is kept locally for inspection and also hashed; production should use encryption, tokenization, masking, and Lake Formation controls.
 - dbt tests cover deterministic checks; production should add operational monitoring such as Anomalo.
-
-## AI Usage Statement
-
-I used AI assistance to speed up documentation structure and boilerplate generation. I reviewed the final code and documentation against the assignment requirements before including it.
