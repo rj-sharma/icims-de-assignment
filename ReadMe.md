@@ -14,6 +14,9 @@ This keeps the project easy to run on a laptop while still showing production-or
 
 ```text
 .
+├── analysis/
+│   ├── source_data_analysis.md
+│   └── source_data_analysis.ipynb
 ├── data/
 │   ├── applications.csv
 │   ├── candidates.json
@@ -34,7 +37,7 @@ This keeps the project easy to run on a laptop while still showing production-or
 │       ├── tests/
 │       └── dbt_project.yml
 ├── scripts/
-│   ├── reset_env.sh
+│   ├── clean_local_artifacts.sh
 │   └── run_pipeline.sh
 ├── src/
 │   └── ingestion/
@@ -47,6 +50,8 @@ This keeps the project easy to run on a laptop while still showing production-or
 ```
 
 For the detailed AWS lakehouse scaling design for a 10TB `workflow_events` dataset, see `architecture-readme.md`.
+
+For source-file profiling and first-pass data quality observations, see `analysis/source_data_analysis.md`. The same analysis is also available as a reproducible pandas notebook at `analysis/source_data_analysis.ipynb`.
 
 ## Data Flow
 
@@ -76,12 +81,6 @@ The dbt layer then standardizes values, parses mixed date formats, deduplicates 
 - `pip`
 - Git or a zip extract of the project
 
-Install dependencies:
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
 The project uses `dbt-duckdb`. If dbt cannot find a profile, create `~/.dbt/profiles.yml`:
 
 ```yaml
@@ -94,23 +93,72 @@ icims_project:
       threads: 4
 ```
 
-Run all commands from the project root:
+## How To Run
+
+### 1. Create And Activate Virtual Environment
+
+Run all setup commands from the project root:
 
 ```bash
 cd icims-de-assignment
 ```
 
-## How To Run
-
-### 1. Optional Clean Reset
-
-Use this when testing from a fresh state:
+Create a local Python virtual environment:
 
 ```bash
-bash scripts/reset_env.sh
+python3 -m venv venv
 ```
 
-### 2. Create Raw Tables
+Activate it:
+
+```bash
+source venv/bin/activate
+```
+
+Install dependencies inside the virtual environment:
+
+```bash
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+
+Verify dbt is available:
+
+```bash
+dbt --version
+```
+
+If you open a new terminal later, activate the environment again before running the pipeline:
+
+```bash
+source venv/bin/activate
+```
+
+### 2. Optional Clean Local Artifacts
+
+Use this when you want to remove generated files and test the project from a clean local state:
+
+```bash
+bash scripts/clean_local_artifacts.sh
+```
+
+The script removes generated artifacts such as local DuckDB files, dbt `target` directories, dbt packages, and logs. It does not remove source code or files under `data/`.
+
+Preview what would be removed:
+
+```bash
+bash scripts/clean_local_artifacts.sh --dry-run
+```
+
+Also remove the local virtual environment:
+
+```bash
+bash scripts/clean_local_artifacts.sh --remove-venv
+```
+
+If you use `--remove-venv`, repeat step 1 before running Python or dbt commands again.
+
+### 3. Create Raw Tables
 
 ```bash
 python3 src/ingestion/create_tables.py
@@ -118,7 +166,7 @@ python3 src/ingestion/create_tables.py
 
 This creates the `raw` schema and raw tables in DuckDB.
 
-### 3. Load Raw Data
+### 4. Load Raw Data
 
 ```bash
 python3 src/ingestion/load_data.py
@@ -136,7 +184,7 @@ Expected raw row counts after a clean load:
 | `raw.workflow_events` | 16769         |
 
 
-### 4. Run dbt Models
+### 5. Run dbt Models
 
 Use the date on which the ingestion ran. For example:
 
@@ -144,7 +192,7 @@ Use the date on which the ingestion ran. For example:
 dbt run --project-dir dbt/icims_project --vars '{"run_date":"2026-05-05"}' --full-refresh
 ```
 
-### 5. Run dbt Tests
+### 6. Run dbt Tests
 
 ```bash
 dbt test --project-dir dbt/icims_project --vars '{"run_date":"2026-05-05"}'
@@ -156,7 +204,7 @@ To store failed records for debugging:
 dbt test --project-dir dbt/icims_project --vars '{"run_date":"2026-05-05"}' --store-failures
 ```
 
-### 6. Run The Pipeline Script
+### 7. Run The Pipeline Script
 
 ```bash
 bash scripts/run_pipeline.sh --date 2026-05-05 --full
