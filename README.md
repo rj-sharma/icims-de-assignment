@@ -18,6 +18,7 @@ The design is intentionally lightweight enough to run on a laptop, while still s
 | [README.md](README.md) | Main submission guide, setup, commands, and assignment summary |
 | [src/ingestion/README.md](src/ingestion/README.md) | Source-specific ingestion assumptions, audit columns, and idempotency details |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Local and production architecture diagrams, including 10TB AWS lakehouse design |
+| [SOLUTION_APPROACH.md](SOLUTION_APPROACH.md) | Crisp step-by-step summary of how the solution was built |
 | [analysis/source_data_analysis.md](analysis/source_data_analysis.md) | Source data profiling summary |
 | [analysis/source_data_analysis.ipynb](analysis/source_data_analysis.ipynb) | Reproducible pandas source analysis notebook |
 | [dbt/icims_project/assignment_sql/task1_answers.sql](dbt/icims_project/assignment_sql/task1_answers.sql) | Task 1 SQL answers |
@@ -45,6 +46,7 @@ The design is intentionally lightweight enough to run on a laptop, while still s
 ├── tests/                            # Python unit tests
 ├── ARCHITECTURE.md
 ├── README.md
+├── SOLUTION_APPROACH.md
 └── requirements.txt
 ```
 
