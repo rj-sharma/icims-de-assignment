@@ -1,9 +1,10 @@
 # Source Ingestion Design
 
-This document explains the local raw ingestion layer. For the main submission guide, start with [../../README.md](../../README.md). For the 10TB production design, see [../../ARCHITECTURE.md](../../ARCHITECTURE.md).
+This document explains the local raw ingestion layer. 
+main README - [../../README.md](../../README.md). 
+architecture README - [../../ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Purpose
-
 The raw layer is the first persisted copy of source data in DuckDB.
 
 It is responsible for:
@@ -16,7 +17,6 @@ It is responsible for:
 - leaving deeper cleanup to dbt staging models
 
 ## Local Stack
-
 | Component | Tool |
 | --- | --- |
 | File reading | Python, pandas, JSON/JSONL parsing |
@@ -25,15 +25,8 @@ It is responsible for:
 | Orchestrator | `src/ingestion/load_data.py` |
 | Source-specific loaders | `ingest_*.py` modules |
 
-By default, ingestion writes to `icims.duckdb`. Override the database path when testing:
-
-```bash
-ICIMS_DB_PATH=/tmp/icims_test.duckdb python3 src/ingestion/create_tables.py
-ICIMS_DB_PATH=/tmp/icims_test.duckdb python3 src/ingestion/load_data.py
-```
 
 ## Code Layout
-
 | File | Responsibility |
 | --- | --- |
 | `create_tables.py` | Creates/recreates raw DuckDB tables |
@@ -87,7 +80,7 @@ Additional source-specific metadata:
 | `source_system` | Logical source system |
 | `file_name` | Loaded file |
 | `file_checksum` | Checksum used to detect reruns |
-| `load_strategy` | `append_extract`, `append_snapshot`, `append_batch`, or `batch_replace` |
+| `load_strategy` | `append_snapshot`, `append_batch`, or `batch_replace` |
 | `status` | `STARTED`, `SUCCEEDED`, or `FAILED` |
 | `started_at` | Batch start timestamp |
 | `completed_at` | Batch completion timestamp |
@@ -131,7 +124,6 @@ The local project keeps `email` and `phone` readable because the assignment data
 - `email_hash`
 - `phone_hash`
 
-Hashing is one-way. You cannot unhash these values.
 
 In production, I would use:
 
@@ -139,8 +131,6 @@ In production, I would use:
 - Lake Formation or warehouse column-level permissions
 - masked analyst-facing views
 - HMAC/salted hashes for deterministic matching
-- tokenization or encryption when reversible lookup is required
-- secrets stored in a secrets manager, not code
 
 ## Daily Processing Semantics
 

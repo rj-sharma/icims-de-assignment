@@ -3,7 +3,7 @@
 This document explains two versions of the same pipeline:
 
 - Local assignment implementation: Python + DuckDB + dbt
-- Production 10TB design: AWS lakehouse with Spark, Iceberg, dbt, Airflow, and governance
+- Production 10TB scale design: AWS lakehouse with Spark, Iceberg, dbt, Airflow, and Glue Ctalog & Lakeformation
 
 The local project is intentionally simple and runnable on a laptop. The production design shows how the same data model and business rules would scale when `workflow_events` becomes a 10TB dataset.
 
@@ -106,7 +106,7 @@ flowchart LR
 
 ## Production Architecture For 10TB Workflow Events
 
-At 10TB, I would not parse JSONL with pandas or load it into one local DuckDB process. I would move ingestion and heavy transformation to a distributed AWS lakehouse while keeping the same logical layers: raw/bronze, cleaned/silver, and analytics/gold.
+At 10TB, I would move ingestion and heavy transformation to a distributed AWS lakehouse while keeping the same logical layers: raw/bronze, cleaned/silver, and analytics/gold.
 
 ### Production Tech Stack
 
@@ -114,15 +114,15 @@ At 10TB, I would not parse JSONL with pandas or load it into one local DuckDB pr
 | --- | --- | --- |
 | Landing storage | Amazon S3 | Durable, low-cost storage for raw files and CDC extracts |
 | Table format | Apache Iceberg on Parquet | ACID writes, schema evolution, partition pruning, time travel, MERGE |
-| Distributed processing | AWS Glue Spark or EMR Spark | Parallel parsing and transformation for multi-TB files |
+| Distributed processing | AWS Glue Spark or EMR Spark | Parallel parsing and transformation and scalable infra for multi-TB files |
 | Catalog | AWS Glue Data Catalog | Central metadata catalog for Iceberg tables |
 | Schema registry | AWS Glue Schema Registry | Schema compatibility checks for event data |
 | Governance | AWS Lake Formation | Table, column, and row-level permissions, especially for PII |
-| Transformation | dbt on Spark/Athena/Trino | SQL modeling, tests, docs, lineage |
+| Transformation | dbt | SQL modeling, tests, docs, lineage |
 | Orchestration | Airflow / MWAA | Scheduling, retries, dependencies, backfills |
 | Monitoring | CloudWatch | Job logs, row counts, failures, latency, alerts |
-| Data quality | dbt tests plus Anomalo/Monte Carlo/Soda/Great Expectations/Deequ | Deterministic tests plus trend-based anomaly monitoring |
-| Query layer | Athena, Trino, Spark SQL, Redshift Spectrum | SQL access to curated Iceberg/Parquet tables |
+| Data quality | dbt tests plus Anomalo | Deterministic tests plus trend-based anomaly monitoring |
+| Query layer | Athena, Redshift Spectrum | SQL access to curated Iceberg/Parquet tables |
 
 ### Production Pipeline Diagram
 
@@ -248,8 +248,8 @@ Why:
 
 - JSONL is expensive to parse repeatedly.
 - Parquet is columnar and compressed.
-- Iceberg supports ACID writes, `MERGE`, schema evolution, hidden partitioning, time travel, and rollback.
-- Athena, Spark, Trino, and dbt-compatible engines can query the same open tables.
+- Iceberg supports ACID writes, `MERGE`, schema evolution, partition pruning, time travel, and rollback.
+- Athena, Spark, and dbt-compatible engines can query the same open tables.
 
 ### Partitioning And Layout
 
@@ -258,13 +258,12 @@ For `workflow_events`, use:
 ```text
 Partition: event_date or ingestion_date
 Sort/cluster: application_id, event_timestamp
-Target file size: 256MB to 1GB
+Target file size: 100MB to 256MB
 ```
 
-Guidance:
+Rationale:
 
 - Use `event_date` when most queries filter by business event time.
-- Use `ingestion_date` when late-arriving data and operational replay are more important.
 - Do not partition by `application_id`; the cardinality is too high.
 - Use compaction to avoid many small files.
 
@@ -273,7 +272,7 @@ Guidance:
 Bronze:
 
 - Process new files only.
-- Track file path, checksum, batch ID, status, row count, and rejection count.
+- Track file path, checksum, batch ID, status, row count, and rejection count in audit tables especially for batch processing.
 - Skip already successful batches.
 - Reprocess failed/corrected batches with overwrite-by-batch or Iceberg `MERGE`.
 
@@ -324,12 +323,10 @@ Production controls:
 - Use Lake Formation for table, column, and row-level access.
 - Restrict raw PII tables to data engineering and approved users.
 - Expose masked/tokenized candidate views to analytics users.
-- Use HMAC/salted hashes for deterministic matching when reversibility is not required.
-- Use tokenization or encryption when authorized reverse lookup is required.
 
 ## Observability
 
-CloudWatch and Airflow should track:
+CloudWatch and Airflow tracks:
 
 - source arrival time
 - job duration
@@ -337,8 +334,6 @@ CloudWatch and Airflow should track:
 - rejected rows
 - duplicate rate
 - anomaly count
-- late-arriving event count
-- Iceberg file counts and compaction status
 - freshness and SLA misses
 
 Recommended alerts:
@@ -347,13 +342,5 @@ Recommended alerts:
 - row count changes beyond threshold
 - rejected records exceed threshold
 - hired-before-applied anomalies spike
-- Spark job duration increases sharply
+- job duration increases sharply
 - Iceberg compaction has not run recently
-
-## Interview Summary
-
-For the assignment, I used Python, DuckDB, and dbt because the data is small and the solution needs to be easy to run locally.
-
-For a 10TB workflow event dataset, I would move to an AWS lakehouse. Raw files land in S3, Glue or EMR Spark reads them in parallel, validates schemas, and writes Parquet-backed Iceberg tables registered in Glue Data Catalog. Lake Formation governs access, especially for candidate PII. Airflow orchestrates ingestion, cleaning, dbt gold models, tests, and backfills. CloudWatch monitors job health, row counts, latency, rejected records, and anomalies.
-
-The main scaling principle is to avoid full refreshes: process only new partitions, identify impacted `application_id` values, recompute those timelines, and merge the changed rows into gold facts and aggregates.

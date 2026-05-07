@@ -1,16 +1,12 @@
 # Source Data Analysis
 
-This note captures the first-pass source data profiling for the assignment datasets. As a data engineer, I would normally start here before designing ingestion, transformations, tests, and the target model.
-
-The goal of this analysis is to understand:
-
+Captures the first-pass source data profiling for the assignment datasets. As a data engineer, I would normally start here before designing ingestion, transformations, tests, and the target model. Focusing on below items:
 - File formats and expected schemas
 - Primary/business keys
 - Nulls and duplicates
 - Mixed date formats
 - Relationship integrity across files
 - Data cleanup required before analytics
-- Business anomalies to preserve and flag
 
 ## Source Files
 
@@ -46,24 +42,13 @@ Date format distribution for `posted_date`:
 | `DD-Mon-YYYY` | 18 |
 | `Month D, YYYY` | 16 |
 
-Department distribution:
-
-| Department | Count |
-| --- | ---: |
-| Marketing | 90 |
-| Product | 85 |
-| Engineering | 76 |
-| Sales | 74 |
-| Finance | 65 |
-| HR | 62 |
-| Null | 48 |
 
 Key cleanup required:
 
 - Parse `posted_date`.
 - Normalize `department` and `status` to uppercase.
 - Add dbt tests for `job_id` uniqueness and non-null `posted_date`.
-- Decide how to handle missing `department`; current pipeline preserves the null so missing source data is visible.
+- Decide how to handle missing `department`; current pipeline preserves the null
 
 ### `applications.csv`
 
@@ -90,7 +75,6 @@ Relationship findings:
 
 - 500 distinct jobs appear in applications.
 - 1841 distinct candidates appear in applications.
-- 506 candidates applied to more than 3 jobs.
 
 Key cleanup required:
 
@@ -141,22 +125,8 @@ Columns:
 | `last_name` | Candidate last name | No nulls | Trim whitespace |
 | `email` | Candidate email | No nulls, no invalid simple email patterns found | Lowercase and validate format |
 | `phone` | Candidate phone | No nulls | Treat as PII in production |
-| `skills` | List of skills | 1 to 5 skills per candidate, average 3.01 | Convert to string for local DuckDB or normalize to bridge table in production |
+| `skills` | List of skills |  | Convert to string for local DuckDB or normalize to bridge table in production |
 
-Top skills:
-
-| Skill | Count |
-| --- | ---: |
-| Communication | 652 |
-| AWS | 619 |
-| Node.js | 612 |
-| React | 603 |
-| Excel | 602 |
-| Docker | 601 |
-| Java | 600 |
-| Kubernetes | 585 |
-| SQL | 583 |
-| Python | 568 |
 
 Relationship findings:
 
@@ -209,13 +179,6 @@ Event timestamp findings:
 - 16768 records use `YYYY-MM-DD`.
 - 1 record uses an ISO timestamp with time component: `2025-11-08T00:00:00`.
 
-Business anomaly:
-
-- 1 `Hired` event occurs before its application date.
-- Application ID: `2391ab47-f15a-4799-a890-64e2deac7190`
-- `event_timestamp`: `2025-11-08T00:00:00`
-- `apply_date`: `2025-11-13`
-
 Key cleanup required:
 
 - Parse `event_timestamp` as timestamp.
@@ -223,24 +186,11 @@ Key cleanup required:
 - Generate a surrogate event key because the file has no natural event ID.
 - Deduplicate by `application_id`, `event_timestamp`, and `new_status`.
 - Flag hired-before-applied anomalies.
-- Exclude anomalous hired events from `time_to_hire_days`, but preserve them for audit.
 
-## Cross-File Relationship Checks
-
-| Check | Result |
-| --- | ---: |
-| Application `job_id` values missing from jobs | 0 |
-| Application `candidate_id` values missing from candidates | 0 |
-| Education `candidate_id` values missing from candidates | 0 |
-| Workflow `application_id` values missing from applications | 0 |
-| Candidates with no applications | 160 |
-| Candidates with no education | 1 |
-| Candidates who applied to more than 3 jobs | 506 |
-| Hired-before-applied workflow events | 1 |
 
 ## Data Quality Rules Derived From Analysis
 
-Recommended dbt/source quality checks:
+Identified dbt/source quality checks:
 
 - `jobs.job_id` is unique and not null.
 - `jobs.posted_date` parses successfully.
@@ -267,4 +217,3 @@ Recommended dbt/source quality checks:
 - Preserve null departments
 - Use a left join from candidates to education so candidates without education are not dropped.
 - Preserve anomalies and flag them instead of deleting them.
-
