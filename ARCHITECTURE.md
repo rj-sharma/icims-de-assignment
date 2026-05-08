@@ -343,4 +343,3 @@ Recommended alerts:
 - rejected records exceed threshold
 - hired-before-applied anomalies spike
 - job duration increases sharply
-- Iceberg compaction has not run recently
