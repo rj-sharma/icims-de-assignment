@@ -7,7 +7,6 @@ The implementation uses a simple local stack:
 - Python for file ingestion
 - DuckDB as the local warehouse and query layer
 - dbt for staging, marts, data quality checks, and SQL transformations
-- pytest for Python unit tests
 
 The design is intentionally local lightweight and quick setup, while still showing production-oriented patterns: batch audit metadata, idempotent pipeline, raw(bronze)-staging(silver)-marts(gold) layers, anomaly detection, and a written AWS lakehouse design for a large scale (10TB) data volume.
 

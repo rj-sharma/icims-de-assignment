@@ -54,7 +54,7 @@ cleaned AS (
         skills_array,
         array_to_string(skills_array, ',') AS skills_normalized,
 
-        -- optional enrichment (nice signal)
+        --Enrichment 
         CASE 
             WHEN skills IS NOT NULL THEN ARRAY_LENGTH(skills_array)
             ELSE 0

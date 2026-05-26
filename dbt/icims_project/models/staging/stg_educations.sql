@@ -28,7 +28,7 @@ standardized AS (
     SELECT
         candidate_id,
 
-        -- normalize degree (important signal)
+        -- normalize degree 
         UPPER(TRIM(degree)) AS degree,
 
         TRIM(institution) AS institution,
